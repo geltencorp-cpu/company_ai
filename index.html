@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>October Assistant</title>
+    
+    <!-- React & 라이브러리 로드 -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        @keyframes pulse-blue { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .animate-pulse-blue { animation: pulse-blue 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 overflow-hidden font-sans text-[15px]">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // 아이콘 컴포넌트 (Lucide 스타일)
+        const Icon = ({ size=24, className="", children, fill="none" }) => (
+          <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+        );
+        const IconMessageSquare = (p) => <Icon {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></Icon>;
+        const IconHardDrive = (p) => <Icon {...p}><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></Icon>;
+        const IconLogOut = (p) => <Icon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></Icon>;
+        const IconSend = (p) => <Icon {...p}><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></Icon>;
+        const IconFileText = (p) => <Icon {...p}><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></Icon>;
+        const IconFolder = (p) => <Icon {...p}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></Icon>;
+        const IconDownload = (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></Icon>;
+        const IconLoader2 = (p) => <Icon {...p}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></Icon>;
+        const IconAlertCircle = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></Icon>;
+        const IconCpu = (p) => <Icon {...p}><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></Icon>;
+        const IconCornerUpLeft = (p) => <Icon {...p}><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></Icon>;
+        const IconServer = (p) => <Icon {...p}><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></Icon>;
+        const IconMonitor = (p) => <Icon {...p}><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></Icon>;
+
+        // 🌟 Tailscale IP 주소
+        const SERVER_URL = "http://100.87.239.57:5000"; 
+        const APP_NAME = "October Assistant";
+        // 🌟 메인 로고 이미지 URL
+        const LOGO_URL = "https://raw.githubusercontent.com/geltencorp-cpu/company_ai/78732c17534945e898f499d9d9983cd0b5e0be18/october.png";
+
+        function App() {
+          const [isLoggedIn, setIsLoggedIn] = useState(false);
+          const [user, setUser] = useState(null);
+          const [activeTab, setActiveTab] = useState('chat');
+          const [selectedModel, setSelectedModel] = useState('auto');
+          
+          const [messages, setMessages] = useState([
+            { id: 1, sender: 'bot', text: '반갑습니다. October입니다! 무엇을 도와드릴까요? 🚀', timestamp: new Date() }
+          ]);
+          const [inputText, setInputText] = useState('');
+          const [isProcessing, setIsProcessing] = useState(false);
+          const [loginError, setLoginError] = useState('');
+          
+          const [files, setFiles] = useState([]); 
+          const [currentPath, setCurrentPath] = useState(""); 
+          const [isFileListLoading, setIsFileListLoading] = useState(false);
+
+          const messagesEndRef = useRef(null);
+
+          useEffect(() => {
+            if (isLoggedIn && activeTab === 'files') fetchFiles(currentPath);
+          }, [isLoggedIn, activeTab, currentPath]);
+
+          useEffect(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }, [messages]);
+
+          const handleLogin = async (e) => {
+            e.preventDefault();
+            setIsProcessing(true);
+            setLoginError('');
+            try {
+              const response = await fetch(`${SERVER_URL}/api/login`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ employeeId: e.target.employeeId.value, password: e.target.password.value }),
+              });
+              const data = await response.json();
+              if (data.success) { setUser(data.user); setIsLoggedIn(true); } 
+              else setLoginError(data.message || "로그인 실패"); 
+            } catch (err) { 
+              setLoginError(`서버 연결 실패! Tailscale 상태를 확인하세요.`);
+            } finally { setIsProcessing(false); }
+          };
+
+          const fetchFiles = async (folderPath) => {
+            setIsFileListLoading(true);
+            try {
+              const res = await fetch(`${SERVER_URL}/api/files?path=${encodeURIComponent(folderPath)}`);
+              const data = await res.json();
+              if (data.success) {
+                setFiles(data.files || []);
+                setCurrentPath(data.currentPath); 
+              } else {
+                alert(data.message); 
+              }
+            } catch (e) { console.error(e); } 
+            finally { setIsFileListLoading(false); }
+          };
+
+          const handleGoBack = () => {
+            const parts = currentPath.split('\\').filter(Boolean);
+            if (parts.length <= 1) setCurrentPath(""); 
+            else setCurrentPath(parts.slice(0, -1).join('\\') + '\\');
+          };
+
+          const handleSendMessage = async (e) => {
+            e.preventDefault();
+            if (!inputText.trim() || isProcessing) return;
+            const msg = inputText;
+            setMessages(p => [...p, { id: Date.now(), sender: 'user', text: msg }]);
+            setInputText(''); setIsProcessing(true);
+            try {
+              const res = await fetch(`${SERVER_URL}/api/chat/ollama`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: msg, model: selectedModel })
+              });
+              const data = await res.json();
+              if(data.success) {
+                setMessages(p => [...p, { 
+                    id: Date.now(), 
+                    sender: 'bot', 
+                    text: data.response, 
+                    usedModel: data.usedModel, 
+                    routingReason: data.routingReason 
+                }]);
+              } else {
+                setMessages(p => [...p, { id: Date.now(), sender: 'bot', text: `[에러] ${data.message}` }]);
+              }
+            } catch (e) { setMessages(p => [...p, { id: Date.now(), sender: 'bot', text: "서버 통신 실패" }]); } 
+            finally { setIsProcessing(false); }
+          };
+
+          if (!isLoggedIn) {
+            return (
+              <div className="flex items-center justify-center min-h-screen p-4 bg-slate-900">
+                <form onSubmit={handleLogin} className="w-full max-w-md p-10 bg-slate-800 rounded-3xl shadow-2xl border border-slate-700 space-y-6">
+                  <div className="flex justify-center mb-2">
+                    {/* 🌟 로그인 로고 크기 확대 (w-24 -> w-40) */}
+                    <img 
+                      src={LOGO_URL} 
+                      alt="October Logo" 
+                      className="w-40 h-40 object-contain drop-shadow-[0_0_20px_rgba(37,99,235,0.4)]"
+                      onError={(e) => { e.target.src = "https://via.placeholder.com/160?text=Oct"; }}
+                    />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <h2 className="text-3xl font-extrabold text-white tracking-tight">{APP_NAME}</h2>
+                    <p className="text-slate-400 text-sm font-medium">Smart AI Assistant Platform</p>
+                  </div>
+                  
+                  {loginError && (<div className="p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-red-200 text-sm flex gap-3 items-start animate-pulse"><IconAlertCircle size={18} className="shrink-0 mt-0.5"/><span>{loginError}</span></div>)}
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">사원 번호</label><input name="employeeId" type="text" placeholder="1001" className="w-full px-5 py-4 bg-slate-950 border border-slate-700 rounded-2xl outline-none focus:border-blue-500 text-sm transition-all focus:ring-4 focus:ring-blue-500/10" required /></div>
+                    <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">비밀번호</label><input name="password" type="password" placeholder="••••••••" className="w-full px-5 py-4 bg-slate-950 border border-slate-700 rounded-2xl outline-none focus:border-blue-500 text-sm transition-all focus:ring-4 focus:ring-blue-500/10" required /></div>
+                  </div>
+                  
+                  <button type="submit" disabled={isProcessing} className="w-full py-4.5 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold text-lg mt-4 flex justify-center items-center shadow-xl shadow-blue-600/20 disabled:bg-slate-700 transition-all active:scale-[0.98]">
+                    {isProcessing ? <IconLoader2 size={24} className="animate-spin" /> : "시스템 접속"}
+                  </button>
+                  <div className="pt-4 border-t border-slate-700/50 text-center"><div className="text-[10px] text-slate-600 uppercase font-bold mb-1 tracking-widest">Connected via Tailscale</div><div className="text-xs font-mono text-blue-500/50">{SERVER_URL}</div></div>
+                </form>
+              </div>
+            );
+          }
+
+          return (
+            <div className="flex h-screen bg-slate-900 text-slate-200 overflow-hidden font-sans">
+              <div className="w-16 bg-slate-950 border-r border-slate-800 flex flex-col items-center py-6 space-y-6 shrink-0">
+                <button onClick={() => setActiveTab('chat')} className={`p-3 rounded-xl transition-all ${activeTab === 'chat' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-500 hover:bg-slate-800'}`}><IconMessageSquare size={20} /></button>
+                <button onClick={() => setActiveTab('files')} className={`p-3 rounded-xl transition-all ${activeTab === 'files' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-500 hover:bg-slate-800'}`}><IconHardDrive size={20} /></button>
+                <div className="flex-1" />
+                <button onClick={() => setIsLoggedIn(false)} className="text-slate-500 hover:text-white p-3 transition-colors"><IconLogOut size={20} /></button>
+              </div>
+              
+              <div className="flex-1 flex flex-col min-w-0">
+                <header className="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-950/50 backdrop-blur-md shrink-0">
+                  <div className="flex items-center gap-4">
+                    {/* 🌟 헤더 로고 크기 확대 (w-8 -> w-12) */}
+                    <img 
+                      src={LOGO_URL} 
+                      alt="Oct Logo" 
+                      className="w-12 h-12 object-contain"
+                      onError={(e) => { e.target.style.display='none'; }}
+                    />
+                    <div className="flex flex-col">
+                        <span className="font-extrabold text-blue-400 tracking-tighter text-lg leading-none">{APP_NAME}</span>
+                        <div className="flex items-center gap-1.5 mt-1">
+                            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">System Online</span>
+                        </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                     <span className="text-[11px] text-slate-400 font-bold uppercase tracking-widest bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-2">
+                       <IconCpu size={14} className="text-yellow-400"/> 멀티 라우팅
+                     </span>
+                     <div className="h-8 w-px bg-slate-800 mx-1"></div>
+                     <span className="text-sm font-bold text-slate-200">{user?.name}님</span>
+                  </div>
+                </header>
+
+                {activeTab === 'chat' ? (
+                  <div className="flex-1 flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2 custom-scrollbar">
+                      {messages.map(m => (
+                        <div key={m.id} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                          {m.routingReason && (
+                            <div className={`text-[12px] mb-1.5 ml-2 font-bold flex items-center gap-1 ${m.routingReason.includes('🆘') ? 'text-red-400 animate-pulse' : 'text-blue-400 animate-pulse-blue'}`}>
+                              {m.routingReason}
+                            </div>
+                          )}
+                          <div className={`p-4 rounded-2xl max-w-[85%] sm:max-w-[75%] text-sm leading-relaxed ${m.sender === 'user' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-800 border border-slate-700 shadow-sm'}`}>{m.text}</div>
+                          {m.usedModel && <div className="text-[10px] bg-slate-950 border border-slate-800 text-slate-500 px-2.5 py-1 rounded-lg mt-1.5 ml-2 uppercase font-mono tracking-tight">Model: {m.usedModel}</div>}
+                        </div>
+                      ))}
+                      {isProcessing && (<div className="flex justify-start"><div className="p-4 bg-slate-800 border border-slate-700 rounded-2xl flex items-center gap-3 shadow-sm"><IconLoader2 size={16} className="text-blue-400 animate-spin" /><span className="text-sm text-slate-400 font-medium">October가 지침에 따라 검토 중입니다...</span></div></div>)}
+                      <div ref={messagesEndRef} />
+                    </div>
+                    
+                    <div className="shrink-0 space-y-3">
+                      <div className="flex justify-end pr-1">
+                        <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="bg-slate-950 border border-slate-700 text-blue-400 font-bold text-xs px-4 py-2 rounded-xl outline-none focus:border-blue-500 shadow-lg cursor-pointer hover:bg-slate-900 transition-colors">
+                          <option value="auto">🤖 AI 자동 배정 (스마트 라우터)</option>
+                          <option value="local">🔒 사내 보안 (Ollama)</option>
+                          <option value="claude">🎭 보고서/정리 (Claude 3.5)</option>
+                          <option value="gpt">🧠 기획/코딩 (GPT-4o)</option>
+                          <option value="gemini">⚡ 검색/문서 (Gemini 1.5)</option>
+                          <option value="groq">🚀 초고속/번역 (Groq)</option>
+                          <option value="mistral">🌪️ 일반 대화 (Mistral)</option>
+                          <option value="huggingface">🤗 오픈소스 모델 (HF)</option>
+                        </select>
+                      </div>
+                      <form onSubmit={handleSendMessage} className="flex gap-2 bg-slate-950 p-2.5 rounded-2xl border border-slate-800 shadow-2xl focus-within:border-blue-500/50 transition-all"><input value={inputText} onChange={e => setInputText(e.target.value)} placeholder="명령을 입력하세요..." className="flex-1 bg-transparent px-4 py-2 outline-none text-[15px] placeholder:text-slate-600" /><button type="submit" disabled={isProcessing} className="bg-blue-600 p-3.5 rounded-xl hover:bg-blue-500 disabled:bg-slate-700 transition-all shadow-lg active:scale-95"><IconSend size={20} /></button></form>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 shrink-0">
+                      <h3 className="text-xl font-bold flex items-center gap-3"><IconHardDrive size={24} className="text-blue-400" /> 지능형 탐색기</h3>
+                      <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 p-2.5 rounded-2xl shadow-inner w-full sm:w-auto overflow-hidden">
+                        {currentPath ? (
+                          <button onClick={handleGoBack} className="text-slate-400 hover:text-white hover:bg-slate-800 p-2 rounded-xl transition-colors flex items-center gap-2 text-sm font-bold shrink-0">
+                            <IconCornerUpLeft size={16} /> 상위
+                          </button>
+                        ) : (
+                          <span className="text-sm font-bold text-slate-500 px-3 shrink-0 uppercase tracking-widest">Drive List</span>
+                        )}
+                        {currentPath && <div className="h-5 w-px bg-slate-700 shrink-0"></div>}
+                        <span className="text-sm text-blue-500 font-mono truncate px-1">{currentPath || "Computer Root"}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden flex flex-col shadow-2xl relative min-h-0">
+                      {isFileListLoading && (<div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10 backdrop-blur-md"><IconLoader2 size={32} className="text-blue-500 animate-spin" /></div>)}
+
+                      <div className="flex-1 overflow-y-auto">
+                        <table className="w-full text-sm text-left whitespace-nowrap">
+                          <thead className="sticky top-0 bg-slate-900 text-slate-500 text-[11px] uppercase font-bold border-b border-slate-800 z-0">
+                            <tr><th className="px-6 py-4 tracking-widest">Name</th><th className="px-6 py-4 text-right tracking-widest">Action</th></tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/50">
+                            {files.length > 0 ? files.map(f => (
+                              <tr 
+                                key={f.id} 
+                                onClick={() => { if(f.type === 'folder' || f.type === 'drive') setCurrentPath(f.actualPath); }}
+                                className={`hover:bg-slate-900/80 transition-all group ${(f.type === 'folder' || f.type === 'drive') ? 'cursor-pointer' : ''}`}
+                              >
+                                <td className="px-6 py-5 flex items-center gap-4 font-medium text-slate-300">
+                                  {f.type === 'drive' && f.category === 'local' && <IconMonitor size={20} className="text-emerald-500 shrink-0" />}
+                                  {f.type === 'drive' && f.category === 'nas' && <IconServer size={20} className="text-purple-500 shrink-0" />}
+                                  {f.type === 'folder' && <IconFolder size={20} className="text-yellow-500 shrink-0" fill="currentColor"/>}
+                                  {f.type === 'file' && <IconFileText size={18} className="text-blue-500 shrink-0" />}
+                                  
+                                  <span className="truncate text-[15px]">{f.name}</span>
+                                  
+                                  {f.type === 'drive' && (
+                                    <span className={`ml-2 px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${f.category === 'local' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`}>
+                                      {f.category === 'local' ? 'AI LOCAL' : 'SHARED NAS'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  {f.type === 'file' ? (
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); window.location.href=`${SERVER_URL}/api/download?filePath=${encodeURIComponent(f.actualPath)}`; }} 
+                                      className="bg-slate-800 hover:bg-blue-600 px-5 py-2.5 rounded-xl text-[12px] font-bold transition-all shadow-md active:scale-95 flex items-center gap-2 ml-auto"
+                                    >
+                                      <IconDownload size={14}/> 저장
+                                    </button>
+                                  ) : (
+                                    <div className="text-[11px] font-bold text-slate-600 uppercase tracking-widest mr-2 group-hover:text-slate-400 transition-colors">Enter</div>
+                                  )}
+                                </td>
+                              </tr>
+                            )) : (
+                              <tr><td colSpan="2" className="px-6 py-16 text-center text-slate-600 italic text-[15px]">폴더가 비어있거나 접근할 수 없습니다.</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
