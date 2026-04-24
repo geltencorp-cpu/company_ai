@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pet VTON - AI 가상 피팅 앱</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Square+Round:wght@400;700;800&family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <style>
+        body { font-family: 'Nanum Square Round', sans-serif; background-color: #fff9f0; word-break: keep-all; }
+        .font-title { font-family: 'Gaegu', cursive; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .tab-content { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .loading-spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid #fff; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-0 md:p-4">
+
+    <div class="w-full max-w-[1200px] mx-auto h-full md:h-[90vh] md:rounded-[2.5rem] flex flex-col relative overflow-hidden bg-[#fffdfa] shadow-[0_20px_50px_rgba(0,0,0,0.1)] md:border-4 border-white" id="app">
+
+        <div id="langContainer" class="absolute top-4 right-5 z-50 transition-opacity duration-300">
+            <select id="langSwitch" onchange="window.setLanguage(this.value)" class="bg-white border-2 border-gray-200 text-gray-700 text-sm rounded-xl px-3 py-2 font-bold shadow-sm focus:outline-none focus:border-[#ff6b6b] cursor-pointer">
+                <option value="ko">🇰🇷 한국어</option>
+                <option value="en">🇺🇸 English</option>
+                <option value="ms">🇲🇾 Melayu</option>
+            </select>
+        </div>
+
+        <div id="screen-register" class="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-8 overflow-y-auto">
+            <div class="space-y-2">
+                <h1 class="text-4xl md:text-5xl font-title text-[#ff6b6b] drop-shadow-sm" data-i18n="title_reg">우리 아이 등록하기 🐾</h1>
+                <p class="text-gray-500 font-bold" data-i18n="desc_reg">귀여운 반려동물의 사진을 올려주세요!</p>
+            </div>
+
+            <div class="w-full max-w-md space-y-6 bg-white p-8 rounded-[2.5rem] shadow-xl border border-orange-50">
+                <div class="space-y-3">
+                    <label class="block text-left text-sm font-bold text-gray-600 ml-1" data-i18n="lbl_photo">📷 반려동물 사진 (옆모습 권장)</label>
+                    <div class="relative group cursor-pointer" onclick="document.getElementById('pet-upload').click()">
+                        <div class="aspect-square rounded-[2rem] border-4 border-dashed border-orange-100 bg-orange-50 flex items-center justify-center overflow-hidden transition-all group-hover:border-[#ff6b6b] group-hover:bg-orange-100">
+                            <img id="previewImage" class="w-full h-full object-cover hidden" alt="미리보기">
+                            <div id="uploadPlaceholder" class="text-center space-y-2">
+                                <div class="text-5xl">🐶</div>
+                                <div class="text-[#ff6b6b] font-bold" data-i18n="txt_sel_photo">사진 선택하기</div>
+                            </div>
+                        </div>
+                        <input type="file" id="pet-upload" class="hidden" accept="image/*" onchange="window.handleImageUpload(event)">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 text-left">
+                    <div class="space-y-2">
+                        <label class="text-sm font-bold text-gray-600 ml-1" data-i18n="lbl_type">🏷️ 종류</label>
+                        <select id="petType" class="w-full px-4 py-3 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-[#ff6b6b] font-bold text-gray-700">
+                            <option value="dog" data-i18n="opt_dog">강아지 🐶</option>
+                            <option value="cat" data-i18n="opt_cat">고양이 🐱</option>
+                        </select>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-bold text-gray-600 ml-1" data-i18n="lbl_breed">🧬 품종 (영어 필수)</label>
+                        <input type="text" id="petBreed" data-i18n="ph_breed" placeholder="예: maltese, poodle" class="w-full px-4 py-3 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-[#ff6b6b] font-bold">
+                    </div>
+                </div>
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" id="unknownBreed" class="w-5 h-5 accent-[#ff6b6b] rounded">
+                    <span class="text-sm text-gray-500 font-bold group-hover:text-gray-700" data-i18n="chk_unknown">그냥 모르겠어요</span>
+                </label>
+
+                <button onclick="window.startFitting()" class="w-full py-4 bg-gradient-to-r from-[#ff8787] to-[#ff6b6b] text-white rounded-2xl font-title text-2xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1" data-i18n="btn_start">
+                    ✨ 피팅룸으로 출발!
+                </button>
+            </div>
+
+            <button onclick="window.toggleSellerMode()" class="text-gray-400 hover:text-indigo-500 font-bold text-sm transition-colors" data-i18n="btn_seller">
+                📦 판매자이신가요? 상품 등록 모드
+            </button>
+        </div>
+
+        <div id="screen-fitting" class="flex-1 flex flex-col md:flex-row hidden h-full w-full bg-[#fffdfa]">
+            <div id="fittingArea" class="relative w-full md:w-3/5 h-[45vh] md:h-full bg-[#f8f9fa] overflow-hidden border-b md:border-b-0 md:border-r border-gray-200">
+                <div class="absolute inset-0 opacity-[0.03] pointer-events-none" style="background-image: radial-gradient(#000 2px, transparent 2px); background-size: 30px 30px;"></div>
+
+                <div class="absolute top-0 left-0 right-0 bg-white/60 backdrop-blur-md px-5 py-4 flex justify-between items-center z-20 shadow-sm mt-12 md:mt-0">
+                    <div class="flex items-center gap-3">
+                        <button onclick="window.goBackToMain()" class="text-gray-500 hover:text-[#ff6b6b] transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <h2 class="text-xl font-title text-[#ff6b6b]" id="headerTitle" data-i18n="title_myroom">마이룸</h2>
+                    </div>
+                    <button onclick="window.restoreOriginalImage()" class="text-xs bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-sm hover:bg-gray-50">
+                        <span data-i18n="btn_restore">🔄 원본 사진으로</span>
+                    </button>
+                </div>
+
+                <img id="vtonBaseImage" class="absolute inset-0 w-full h-full object-contain pointer-events-none pt-24 md:pt-16" alt="반려동물">
+                <div id="itemCanvas" class="absolute inset-0 w-full h-full pt-24 md:pt-16"></div>
+
+                <div id="aiLoading" class="absolute inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex-col items-center justify-center text-white text-center p-6">
+                    <div class="loading-spinner mb-6"></div>
+                    <p class="text-2xl font-title mb-2" id="aiLoadingText" data-i18n="txt_loading">AI가 옷을 합성 중입니다...</p>
+                    <p class="text-sm opacity-80" data-i18n="txt_loading_desc">마법을 부리는 중이에요! (약 10~20초 소요)</p>
+                </div>
+            </div>
+
+            <div class="w-full md:w-2/5 flex flex-col h-[55vh] md:h-full bg-white relative">
+                <div class="p-6 pb-0">
+                    <div class="bg-[#fff5f5] p-4 rounded-2xl border border-[#ffe3e3] mb-6 flex items-start gap-3">
+                        <span class="text-2xl">🤖</span>
+                        <p class="text-xs text-[#ff6b6b] leading-relaxed font-bold" data-i18n="txt_ai_guide">원하는 옷을 고르고 <b>[AI 합성]</b>을 눌러보세요!</p>
+                    </div>
+
+                    <div class="flex gap-2 mb-6 border-b border-gray-100">
+                        <button onclick="window.switchTab('clothes')" class="tab-btn flex-1 py-3 font-bold border-b-4 border-[#ff6b6b] text-[#ff6b6b] transition-all" data-target="tab-clothes" data-i18n="tab_clothes">옷 👕</button>
+                        <button onclick="window.switchTab('acc')" class="tab-btn flex-1 py-3 font-bold border-b-4 border-transparent text-gray-400 hover:text-gray-600 transition-all" data-target="tab-acc" data-i18n="tab_acc">모자/악세 🧢</button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-4 bg-[#fffdfa] no-scrollbar">
+                    <div id="tab-clothes" class="tab-content grid grid-cols-2 gap-4"></div>
+                    <div id="tab-acc" class="tab-content hidden grid grid-cols-2 gap-4"></div>
+                </div>
+
+                <div class="bg-white border-t border-gray-100 px-6 py-5 shadow-[0_-10px_20px_rgba(0,0,0,0.03)] z-20">
+                    <div id="cartList" class="flex flex-col gap-2 max-h-32 overflow-y-auto mb-3 hidden bg-gray-50 p-3 rounded-xl border border-gray-100 text-gray-700"></div>
+                    <div class="flex justify-between items-end mb-4">
+                        <span class="text-sm text-gray-500 font-bold"><span data-i18n="txt_cart">장바구니</span> (<span id="cartCount" class="text-[#ff6b6b]">0</span>)</span>
+                        <span class="text-2xl font-title text-gray-800"><span id="totalPrice">0</span><span class="text-sm font-sans ml-1 text-gray-500 font-bold">원</span></span>
+                    </div>
+                    <button onclick="window.checkout()" class="w-full py-4 bg-gradient-to-r from-[#ff8787] to-[#ff6b6b] text-white rounded-2xl font-title text-lg shadow-lg hover:shadow-xl transition-all" data-i18n="btn_checkout">
+                        💳 구매하기
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="screen-seller" class="flex-1 flex flex-col hidden absolute inset-0 w-full h-full bg-[#fffdfa] z-40 overflow-y-auto pb-10">
+            <div class="bg-white px-6 py-4 flex justify-between items-center shadow-sm sticky top-0 z-50 mt-12 md:mt-0">
+                <h2 class="text-xl font-title text-gray-800" data-i18n="title_seller">📦 구글 클라우드 마켓 등록</h2>
+                <button onclick="window.exitSellerMode()" class="text-sm bg-gray-100 text-gray-600 px-4 py-2 rounded-full font-bold hover:bg-gray-200 transition-all" data-i18n="btn_close">닫기</button>
+            </div>
+            <div class="p-6 md:p-10 max-w-2xl mx-auto w-full">
+                <div class="bg-[#eef2ff] p-5 rounded-2xl border-2 border-[#e0e7ff] mb-8 shadow-sm">
+                    <p class="text-indigo-600 font-bold mb-2" data-i18n="seller_guide_title">☁️ Firebase 실시간 연동 중</p>
+                    <p class="text-sm text-gray-600 leading-relaxed mb-4" data-i18n="seller_guide_desc">여기에 등록된 상품은 구글 클라우드(Firestore)에 안전하게 저장됩니다!</p>
+                    <div class="p-3 bg-white rounded-xl border border-indigo-100 text-sm text-gray-700">
+                        <span class="font-bold text-indigo-500">💡 꿀팁:</span> AI는 사진보다 <b>'영어 키워드'</b>를 더 정확히 따릅니다. 옷의 색상과 무늬를 상세히 적어주세요!
+                    </div>
+                </div>
+
+                <form id="sellerForm" class="space-y-6 bg-white p-6 md:p-8 rounded-[2rem] shadow-lg border border-gray-50">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2" data-i18n="lbl_thumbnail">📸 썸네일 (목록 전시용)</label>
+                            <div class="mt-1 flex justify-center px-4 pt-4 pb-4 border-2 border-orange-200 border-dashed rounded-xl relative overflow-hidden bg-orange-50 hover:bg-orange-100 h-32 cursor-pointer" onclick="document.getElementById('seller-thumbnail-upload').click()">
+                                <img id="sellerThumbnailPreview" class="absolute inset-0 w-full h-full object-cover hidden z-10">
+                                <div id="sellerThumbnailPlaceholder" class="flex flex-col items-center justify-center h-full text-center">
+                                    <div class="text-3xl">🖼️</div>
+                                    <div class="text-xs text-orange-600 font-bold" data-i18n="txt_sel_thumbnail">썸네일 등록</div>
+                                </div>
+                                <input id="seller-thumbnail-upload" type="file" class="hidden" accept="image/*" onchange="window.handleSellerThumbnailUpload(event)">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2" data-i18n="lbl_product_img">📸 AI 합성용 옷 사진</label>
+                            <div class="mt-1 flex justify-center px-4 pt-4 pb-4 border-2 border-indigo-200 border-dashed rounded-xl relative overflow-hidden bg-indigo-50 hover:bg-indigo-100 h-32 cursor-pointer" onclick="document.getElementById('seller-file-upload').click()">
+                                <img id="sellerPreviewImage" class="absolute inset-0 w-full h-full object-contain hidden z-10">
+                                <div id="sellerUploadPlaceholder" class="flex flex-col items-center justify-center h-full text-center">
+                                    <div class="text-3xl">👕</div>
+                                    <div class="text-xs text-indigo-600 font-bold" data-i18n="txt_sel_product_img">옷 사진 등록</div>
+                                </div>
+                                <input id="seller-file-upload" type="file" class="hidden" accept="image/*" onchange="window.handleSellerImageUpload(event)">
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2" data-i18n="lbl_cat">🏷️ 카테고리</label>
+                        <select id="sellerCategory" class="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <option value="clothes">Clothes</option>
+                            <option value="acc">Accessories</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2" data-i18n="lbl_name">📌 상품명</label>
+                        <input type="text" id="sellerProductName" data-i18n="ph_name" placeholder="상품명을 입력하세요" class="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2" data-i18n="lbl_price">💰 가격 (원)</label>
+                            <input type="number" id="sellerPrice" placeholder="25000" class="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2" data-i18n="lbl_prompt">🤖 AI 합성 키워드</label>
+                            <input type="text" id="sellerPrompt" data-i18n="ph_prompt" placeholder="영어 키워드" class="block w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50">
+                        </div>
+                    </div>
+                    <button type="button" id="uploadBtn" onclick="window.uploadNewProduct()" class="w-full py-4 rounded-2xl shadow-md text-lg font-title text-white bg-indigo-600 hover:bg-indigo-700 transition-colors" data-i18n="btn_upload">클라우드에 상품 등록하기</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 bg-gray-800 text-white rounded-full text-sm font-bold opacity-0 transition-all z-[100] pointer-events-none"></div>
+    </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    // --- 앱 기본 기능 먼저 정의 (에러 발생 시에도 작동하도록) ---
+    window.showToast = (msg) => {
+        const t = document.getElementById('toast');
+        t.innerText = msg; t.style.opacity = '1';
+        setTimeout(() => t.style.opacity = '0', 3000); // 메시지 읽을 시간 약간 늘림
+    };
+
+    const defaultCatalog = {
+        clothes: [
+            { id: 'c1', name: '파란색 기본 티셔츠', price: 15000, emoji: '👕', promptKeyword: 'plain blue t-shirt' },
+            { id: 'c2', name: '민트 꽃무늬 원피스', price: 22000, emoji: '👗', promptKeyword: 'mint green floral dress' }
+        ],
+        acc: [
+            { id: 'a1', name: '파란색 캡모자', price: 12000, emoji: '🧢', promptKeyword: 'blue baseball cap' },
+            { id: 'a2', name: '검은색 선글라스', price: 10000, emoji: '🕶️', promptKeyword: 'black sunglasses' }
+        ]
+    };
+
+    window.catalog = { clothes: [...defaultCatalog.clothes], acc: [...defaultCatalog.acc] };
+    window.petData = { originalImageSrc: null, imageSrc: null, type: 'dog', breed: '', displayBreed: '' };
+    window.cart = [];
+
+    window.renderCatalog = () => {
+        for (const [cat, items] of Object.entries(window.catalog)) {
+            const container = document.getElementById(`tab-${cat}`);
+            if (!container) continue;
+            container.innerHTML = '';
+            items.forEach(item => {
+                const el = document.createElement('div');
+                el.className = "bg-white border-2 border-orange-50 rounded-2xl p-4 flex flex-col items-center justify-between shadow-sm hover:border-[#ff6b6b] relative";
+                
+                let visual = '';
+                if (item.thumbnail && String(item.thumbnail) !== 'undefined') visual = `<img src="${item.thumbnail}" class="h-16 w-full object-contain mb-2 mt-2 rounded">`;
+                else if (item.imageSrc && String(item.imageSrc) !== 'undefined') visual = `<img src="${item.imageSrc}" class="h-16 w-full object-contain mb-2 mt-2 rounded">`;
+                else visual = `<div class="text-5xl mb-2 mt-2">${item.emoji || '📦'}</div>`;
+
+                el.innerHTML = `
+                    <button onclick='window.addToCart(${JSON.stringify(item)})' class="absolute top-2 right-2 w-7 h-7 bg-white border border-gray-100 rounded-full flex items-center justify-center shadow hover:scale-110 z-10 text-sm">🛒</button>
+                    <div class="flex flex-col items-center w-full cursor-pointer" onclick='window.tryOnWithAI(${JSON.stringify(item)})'>
+                        ${visual}
+                        <div class="text-[10px] md:text-sm font-bold text-center line-clamp-1 w-full">${item.name}</div>
+                        <div class="text-[10px] md:text-xs text-[#ff6b6b] mt-1 mb-2">${item.price.toLocaleString()}</div>
+                    </div>
+                    <button onclick='window.tryOnWithAI(${JSON.stringify(item)})' class="w-full bg-purple-50 text-purple-600 text-[10px] md:text-xs font-bold py-1.5 rounded-lg hover:bg-purple-100 transition-colors">🪄 AI 피팅</button>
+                `;
+                container.appendChild(el);
+            });
+        }
+    };
+
+    // --- 언어 사전 ---
+    const i18n = {
+        ko: {
+            title_reg: "우리 아이 등록하기 🐾", desc_reg: "귀여운 반려동물의 사진을 올려주세요!", lbl_photo: "📷 반려동물 사진 (옆모습 권장)",
+            txt_sel_photo: "사진 선택하기", lbl_type: "🏷️ 종류", opt_dog: "강아지 🐶", opt_cat: "고양이 🐱", lbl_breed: "🧬 품종 (영어 필수)",
+            ph_breed: "예: maltese, poodle", chk_unknown: "그냥 모르겠어요", btn_start: "✨ 피팅룸으로 출발!", btn_seller: "📦 판매자이신가요? 상품 등록 모드",
+            title_myroom: "마이룸", btn_restore: "🔄 원본 사진으로", txt_loading: "AI가 옷을 합성 중입니다...", txt_loading_desc: "마법을 부리는 중이에요! (약 10~20초 소요)",
+            txt_ai_guide: "원하는 옷을 고르고 <b>[AI 합성]</b>을 눌러보세요!", tab_clothes: "옷 👕", tab_acc: "모자/악세 🧢", txt_cart: "장바구니", btn_checkout: "💳 구매하기",
+            title_seller: "📦 구글 클라우드 마켓 등록", btn_close: "닫기", seller_guide_title: "☁️ Firebase 실시간 연동 중", seller_guide_desc: "여기에 등록된 상품은 구글 클라우드에 안전하게 저장됩니다!",
+            lbl_cat: "🏷️ 카테고리", lbl_name: "📌 상품명", ph_name: "예: 봄맞이 노란색 원피스", lbl_price: "💰 가격 (원)", lbl_thumbnail: "📸 썸네일 (목록 전시용)",
+            txt_sel_thumbnail: "썸네일 등록", lbl_prompt: "🤖 AI 합성 키워드", ph_prompt: "예: wearing a red striped t-shirt", btn_upload: "클라우드에 상품 등록하기",
+            gift_friend: "귀여운 친구", fitting_room: "피팅룸", btn_ai_fitting: "🪄 AI 피팅", toast_need_photo: "사진과 품종을 입력해주세요!",
+            toast_ai_success: "피팅 완료!", toast_ai_fail: "AI 합성 실패", loading_ai: "옷 입히는 중... 🐶", toast_restore: "원본으로 복구되었습니다.",
+            toast_cart_empty: "장바구니가 비어 있습니다.", toast_checkout: "결제 화면으로 이동합니다! (임시)", toast_need_info: "정보를 모두 입력해주세요!",
+            txt_uploading: "업로드 중...", toast_uploaded: "클라우드 등록 완료! 🎉", toast_temp_uploaded: "임시 등록 완료! 🎉",
+            toast_upload_fail: "등록 실패", txt_added_cart: "장바구니 담기 완료!", lbl_product_img: "📸 AI 합성용 옷 사진", txt_sel_product_img: "옷 사진 등록"
+        },
+        en: {
+            title_reg: "Register My Pet 🐾", desc_reg: "Upload a photo of your pet!", lbl_photo: "📷 Pet Photo (Side recommended)",
+            txt_sel_photo: "Select Photo", lbl_type: "🏷️ Type", opt_dog: "Dog 🐶", opt_cat: "Cat 🐱", lbl_breed: "🧬 Breed (English only)",
+            ph_breed: "e.g., maltese, poodle", chk_unknown: "Unknown", btn_start: "✨ Go to Fitting Room!", btn_seller: "📦 Seller Mode",
+            title_myroom: "My Room", btn_restore: "🔄 Restore Original", txt_loading: "AI is synthesizing...", txt_loading_desc: "Working magic! (10~20s)",
+            txt_ai_guide: "Choose clothes and click <b>[AI Fitting]</b>!", tab_clothes: "Clothes 👕", tab_acc: "Accessories 🧢", txt_cart: "Cart", btn_checkout: "💳 Checkout",
+            title_seller: "📦 Product Registration", btn_close: "Close", seller_guide_title: "☁️ Firebase Real-time", seller_guide_desc: "Products are saved in Google Cloud!",
+            lbl_cat: "Category", lbl_name: "Product Name", ph_name: "e.g., Yellow Dress", lbl_price: "Price", lbl_thumbnail: "Thumbnail",
+            txt_sel_thumbnail: "Upload Thumbnail", lbl_prompt: "AI Keywords", ph_prompt: "e.g., red striped t-shirt", btn_upload: "Upload to Cloud",
+            gift_friend: "Cute Friend", fitting_room: "Fitting Room", btn_ai_fitting: "🪄 AI Fitting", toast_need_photo: "Upload photo & breed!",
+            toast_ai_success: "Fitting Complete!", toast_ai_fail: "AI Failed", loading_ai: "Dressing up... 🐶", toast_restore: "Restored.",
+            toast_cart_empty: "Cart is empty.", toast_checkout: "Moving to checkout!", toast_need_info: "Fill in all info!",
+            txt_uploading: "Uploading...", toast_uploaded: "Upload Success! 🎉", toast_temp_uploaded: "Temp Success!",
+            toast_upload_fail: "Upload Failed", txt_added_cart: "Added to cart!", lbl_product_img: "Product Image", txt_sel_product_img: "Upload Garment"
+        },
+        ms: {
+            title_reg: "Daftar Haiwan 🐾", desc_reg: "Muat naik gambar haiwan anda!", lbl_photo: "📷 Gambar Haiwan",
+            txt_sel_photo: "Pilih Gambar", lbl_type: "🏷️ Jenis", opt_dog: "Anjing 🐶", opt_cat: "Kucing 🐱", lbl_breed: "🧬 Baka (Inggeris)",
+            ph_breed: "cth: maltese, poodle", chk_unknown: "Tidak tahu", btn_start: "✨ Ke Bilik Percubaan!", btn_seller: "📦 Mod Penjual",
+            title_myroom: "Bilik Saya", btn_restore: "🔄 Gambar Asal", txt_loading: "AI sedang menyintesis...", txt_loading_desc: "Tunggu sebentar! (10~20s)",
+            txt_ai_guide: "Pilih pakaian & klik <b>[AI Fitting]</b>!", tab_clothes: "Pakaian 👕", tab_acc: "Aksesori 🧢", txt_cart: "Troli", btn_checkout: "💳 Beli",
+            title_seller: "📦 Pendaftaran Produk", btn_close: "Tutup", seller_guide_title: "☁️ Segerak Firebase", seller_guide_desc: "Produk disimpan di Google Cloud!",
+            lbl_cat: "Kategori", lbl_name: "Nama Produk", ph_name: "cth: Baju Kuning", lbl_price: "Harga", lbl_thumbnail: "Gambar Kenit",
+            txt_sel_thumbnail: "Muat naik Gambar", lbl_prompt: "Kata Kunci AI", ph_prompt: "cth: red striped t-shirt", btn_upload: "Daftar ke Cloud",
+            gift_friend: "Kawan Comel", fitting_room: "Bilik Percubaan", btn_ai_fitting: "🪄 AI Fitting", toast_need_photo: "Muat naik gambar & baka!",
+            toast_ai_success: "Selesai!", toast_ai_fail: "AI Gagal", loading_ai: "Memakai baju... 🐶", toast_restore: "Asal.",
+            toast_cart_empty: "Troli kosong.", toast_checkout: "Ke pembayaran!", toast_need_info: "Isi semua info!",
+            txt_uploading: "Muat naik...", toast_uploaded: "Berjaya! 🎉", toast_temp_uploaded: "Berjaya Sementara!",
+            toast_upload_fail: "Gagal", txt_added_cart: "Tambah troli!", lbl_product_img: "Gambar Pakaian", txt_sel_product_img: "Muat naik Baju"
+        }
+    };
+
+    let currentLang = 'ko';
+    window.t = (key) => i18n[currentLang][key] || key;
+    window.setLanguage = (lang) => {
+        currentLang = lang;
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.placeholder = window.t(key);
+            else el.innerHTML = window.t(key);
+        });
+        window.renderCatalog();
+    };
+
+    // --- Firebase 초기화 및 에러 핸들링 ---
+    let db, auth, userObj = null;
+    const firebaseConfig = {
+        apiKey: "AIzaSyDsm2uFDF3XP9cxoO0B7DlGdhmS7yWWHxo",
+        authDomain: "gen-lang-client-0329003821.firebaseapp.com",
+        projectId: "gen-lang-client-0329003821",
+        storageBucket: "gen-lang-client-0329003821.firebasestorage.app",
+        messagingSenderId: "1071911384208",
+        appId: "1:1071911384208:web:a01550a0a3575ef5e75415"
+    };
+
+    async function initFirebase() {
+        try {
+            const app = initializeApp(firebaseConfig);
+            
+            // 💡 해결 완료: 앱이 대표님의 실제 데이터베이스 고유 이름으로 찾아가도록 수정했습니다!
+            db = getFirestore(app, "ai-studio-2bbdb959-b178-48c9-a20f-a3395741cf70");
+            auth = getAuth(app);
+            
+            // Firebase 콘솔에서 익명 로그인을 켜지 않았을 때 에러 처리 (throw 하지 않고 로컬 모드로 전환)
+            try {
+                await signInAnonymously(auth);
+            } catch (authError) {
+                if (authError.code === 'auth/admin-restricted-operation') {
+                    // 약간의 딜레이를 주어 UI가 로드된 후 토스트가 뜨도록 함
+                    setTimeout(() => {
+                        window.showToast("⚠️ Firebase 콘솔에서 '익명 로그인'을 켜주세요! (임시 로컬 모드로 실행 중)");
+                    }, 1000);
+                }
+                console.warn("Firebase Auth Error:", authError.message);
+                window.renderCatalog(); // 인증 실패 시에도 로컬 카탈로그를 보여주며 계속 실행
+                return; // 인증에 실패했으므로 DB 연동은 중단
+            }
+
+            onAuthStateChanged(auth, user => {
+                userObj = user;
+                if (!user) return;
+                const q = query(collection(db, 'products'), orderBy('timestamp', 'desc'));
+                onSnapshot(q, (snapshot) => {
+                    window.catalog = { clothes: [...defaultCatalog.clothes], acc: [...defaultCatalog.acc] };
+                    snapshot.forEach(doc => {
+                        const p = doc.data();
+                        window.catalog[p.category].unshift({ id: doc.id, ...p });
+                    });
+                    window.renderCatalog();
+                }, (error) => {
+                    console.warn("Firestore Warning", error.message);
+                    // DB 읽기 권한 등 에러 발생 시에도 작동하도록
+                    window.renderCatalog();
+                });
+            });
+        } catch(e) { 
+            console.warn("Firebase init failed, running in local mode", e);
+            // 최상단 에러 발생 시에도 앱이 정상 작동하도록 fallback
+            window.renderCatalog(); 
+        }
+    }
+    
+    // UI가 준비된 후 파이어베이스 초기화를 실행하여 showToast 등이 안전하게 작동하도록 함
+    document.addEventListener("DOMContentLoaded", () => {
+        initFirebase();
+    });
+
+    // --- 앱 로직 ---
+    window.handleImageUpload = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const r = new FileReader();
+            r.onload = ev => {
+                window.petData.originalImageSrc = window.petData.imageSrc = ev.target.result;
+                document.getElementById('previewImage').src = ev.target.result;
+                document.getElementById('previewImage').classList.remove('hidden');
+                document.getElementById('uploadPlaceholder').classList.add('hidden');
+            };
+            r.readAsDataURL(file);
+        }
+    };
+
+    window.startFitting = () => {
+        const isUnknown = document.getElementById('unknownBreed').checked;
+        if (isUnknown) {
+            window.petData.breed = document.getElementById('petType').value === 'dog' ? 'dog' : 'cat';
+            window.petData.displayBreed = window.t('gift_friend');
+        } else {
+            window.petData.breed = window.petData.displayBreed = document.getElementById('petBreed').value;
+        }
+        if (!window.petData.imageSrc || (!isUnknown && !window.petData.breed)) return window.showToast(window.t('toast_need_photo'));
+        
+        document.getElementById('langContainer').classList.add('hidden');
+        document.getElementById('screen-register').classList.add('hidden');
+        document.getElementById('screen-fitting').classList.remove('hidden');
+        document.getElementById('vtonBaseImage').src = window.petData.imageSrc;
+        document.getElementById('headerTitle').innerText = `${window.petData.displayBreed} ${window.t('fitting_room')}`;
+        window.renderCatalog();
+    };
+
+    window.goBackToMain = () => {
+        document.getElementById('screen-fitting').classList.add('hidden');
+        document.getElementById('screen-register').classList.remove('hidden');
+        document.getElementById('langContainer').classList.remove('hidden');
+    };
+
+    window.switchTab = (cat) => {
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.remove('text-[#ff6b6b]', 'border-[#ff6b6b]'); b.classList.add('text-gray-400', 'border-transparent');
+        });
+        document.querySelector(`[data-target="tab-${cat}"]`).classList.add('text-[#ff6b6b]', 'border-[#ff6b6b]');
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+        document.getElementById(`tab-${cat}`).classList.remove('hidden');
+    };
+
+    window.tryOnWithAI = async (item) => {
+        const loading = document.getElementById('aiLoading');
+        loading.classList.replace('hidden', 'flex');
+        try {
+            // [중요] 배포 시 Functions URL로 교체 필요
+            const PROXY_URL = "https://your-firebase-function-url/generateAiFitting"; 
+            
+            const parts = [
+                { text: `Edit the first image. Make the pet wear the exact item from the second image. Keywords: ${item.promptKeyword}. Replicate colors, patterns, and stripes exactly. Keep face and fur same.` },
+                { inlineData: { mimeType: "image/jpeg", data: window.petData.originalImageSrc.split(',')[1] } }
+            ];
+            if (item.imageSrc) parts.push({ inlineData: { mimeType: "image/jpeg", data: item.imageSrc.split(',')[1] } });
+
+            // 임시로 브라우저에서 직접 호출 (배포 시 막힐 수 있음)
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=YOUR_ACTUAL_AI_KEY`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ role: "user", parts: parts }], generationConfig: { responseModalities: ["IMAGE"] } })
+            });
+            const res = await response.json();
+            const b64 = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+            if (b64) document.getElementById('vtonBaseImage').src = `data:image/jpeg;base64,${b64}`;
+            else throw new Error("Fail");
+        } catch(e) { window.showToast(window.t('toast_ai_fail')); }
+        finally { loading.classList.replace('flex', 'hidden'); }
+    };
+
+    window.restoreOriginalImage = () => {
+        document.getElementById('vtonBaseImage').src = window.petData.originalImageSrc;
+        window.showToast(window.t('toast_restore'));
+    };
+
+    window.addToCart = (i) => {
+        window.cart.push({ ...i, cartId: Date.now() });
+        window.updateCartInfo();
+        window.showToast(window.t('txt_added_cart'));
+    };
+
+    window.updateCartInfo = () => {
+        const list = document.getElementById('cartList');
+        document.getElementById('cartCount').innerText = window.cart.length;
+        document.getElementById('totalPrice').innerText = window.cart.reduce((s, i) => s + i.price, 0).toLocaleString();
+        if (window.cart.length > 0) {
+            list.classList.remove('hidden');
+            list.innerHTML = window.cart.map(i => `<div class="flex justify-between text-xs border-b pb-1"><span>${i.name}</span><span>${i.price.toLocaleString()}원</span></div>`).join('');
+        } else list.classList.add('hidden');
+    };
+
+    window.checkout = () => window.showToast(window.cart.length ? window.t('toast_checkout') : window.t('toast_cart_empty'));
+
+    // --- 판매자 기능 ---
+    window.sellerThumbnail = null; window.sellerGarment = null;
+    window.toggleSellerMode = () => document.getElementById('screen-seller').classList.remove('hidden');
+    window.exitSellerMode = () => document.getElementById('screen-seller').classList.add('hidden');
+    
+    const compress = (f, callback) => {
+        const r = new FileReader();
+        r.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const c = document.createElement('canvas');
+                const MAX = 400; const scale = MAX / Math.max(img.width, img.height);
+                c.width = img.width * scale; c.height = img.height * scale;
+                c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                callback(c.toDataURL('image/jpeg', 0.7));
+            };
+            img.src = e.target.result;
+        };
+        r.readAsDataURL(f);
+    };
+
+    window.handleSellerThumbnailUpload = (e) => compress(e.target.files[0], (b) => {
+        window.sellerThumbnail = b;
+        document.getElementById('sellerThumbnailPreview').src = b;
+        document.getElementById('sellerThumbnailPreview').classList.remove('hidden');
+        document.getElementById('sellerThumbnailPlaceholder').classList.add('hidden');
+    });
+
+    window.handleSellerImageUpload = (e) => compress(e.target.files[0], (b) => {
+        window.sellerGarment = b;
+        document.getElementById('sellerPreviewImage').src = b;
+        document.getElementById('sellerPreviewImage').classList.remove('hidden');
+        document.getElementById('sellerUploadPlaceholder').classList.add('hidden');
+    });
+
+    window.uploadNewProduct = async () => {
+        const name = document.getElementById('sellerProductName').value;
+        const price = parseInt(document.getElementById('sellerPrice').value);
+        const prompt = document.getElementById('sellerPrompt').value;
+        if (!name || !price || !prompt || !window.sellerGarment) return window.showToast(window.t('toast_need_info'));
+        
+        const btn = document.getElementById('uploadBtn');
+        btn.innerText = window.t('txt_uploading'); btn.disabled = true;
+        
+        try {
+            await addDoc(collection(db, 'products'), {
+                category: document.getElementById('sellerCategory').value,
+                name, price, promptKeyword: prompt,
+                thumbnail: window.sellerThumbnail, imageSrc: window.sellerGarment,
+                timestamp: Date.now()
+            });
+            window.showToast(window.t('toast_uploaded'));
+            window.exitSellerMode();
+        } catch(e) { window.showToast(window.t('toast_upload_fail')); }
+        finally { btn.innerText = window.t('btn_upload'); btn.disabled = false; }
+    };
+</script>
+</body>
+</html>
